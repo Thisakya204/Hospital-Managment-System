@@ -4,9 +4,13 @@ const path = require('path');
 const fs = require('fs');
 const { initDB } = require('./db/database');
 
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+const uploadsDir = process.env.VERCEL ? path.join('/tmp', 'uploads') : path.join(__dirname, 'uploads');
+try {
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+} catch (e) {
+  // Ignore filesystem errors in read-only environments
 }
 
 const authRoutes = require('./routes/auth');

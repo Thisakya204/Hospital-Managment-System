@@ -3,11 +3,15 @@ const path = require('path');
 const { all, run } = require('../db/database');
 const { logAudit } = require('./auditLogger');
 
-const BACKUP_DIR = path.join(__dirname, '..', 'backups');
+const BACKUP_DIR = process.env.VERCEL ? path.join('/tmp', 'backups') : path.join(__dirname, '..', 'backups');
 
 // Ensure backups folder exists
-if (!fs.existsSync(BACKUP_DIR)) {
-  fs.mkdirSync(BACKUP_DIR, { recursive: true });
+try {
+  if (!fs.existsSync(BACKUP_DIR)) {
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+  }
+} catch (e) {
+  // Ignore filesystem errors in read-only environments
 }
 
 // Perform full database snapshot
@@ -116,6 +120,9 @@ function getDisasterRecoveryPlan() {
 
 // Start automated cron-like scheduler (Daily & Weekly)
 function startBackupScheduler() {
+  if (process.env.VERCEL) {
+    return;
+  }
   console.log('⏰ Automated Daily & Weekly Backup Scheduler Initialized.');
 
   // Run initial daily backup after 5 seconds if no backup exists today
