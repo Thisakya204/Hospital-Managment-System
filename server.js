@@ -34,6 +34,20 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(uploadsDir));
 
+// Database auto-init middleware (ensures DB is ready in serverless environments)
+let dbInitialized = false;
+app.use(async (req, res, next) => {
+  if (!dbInitialized) {
+    try {
+      await initDB();
+      dbInitialized = true;
+    } catch (e) {
+      console.error('Failed to initialize database in middleware:', e);
+    }
+  }
+  next();
+});
+
 // Mount API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/patients', patientRoutes);
@@ -60,15 +74,19 @@ async function startServer() {
   try {
     await initDB();
     startBackupScheduler();
-    app.listen(PORT, () => {
-      console.log(`=======================================================`);
-      console.log(`🏥 Hospital Management System (HMS) Server Running`);
-      console.log(`🌐 Server URL: http://localhost:${PORT}`);
-      console.log(`=======================================================`);
-    });
+    if (!process.env.VERCEL) {
+      app.listen(PORT, () => {
+        console.log(`=======================================================`);
+        console.log(`🏥 Hospital Management System (HMS) Server Running`);
+        console.log(`🌐 Server URL: http://localhost:${PORT}`);
+        console.log(`=======================================================`);
+      });
+    }
   } catch (err) {
     console.error('Failed to initialize Hospital Management System server:', err);
   }
 }
 
 startServer();
+
+module.exports = app;

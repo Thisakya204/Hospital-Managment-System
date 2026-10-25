@@ -24,7 +24,22 @@ const mssqlConfig = {
 
 // SQLite setup
 const sqlite3 = require('sqlite3').verbose();
-const dbFilePath = process.env.SQLITE_PATH || path.join(__dirname, 'hms.db');
+let dbFilePath = process.env.SQLITE_PATH || path.join(__dirname, 'hms.db');
+
+if (process.env.VERCEL) {
+  const tmpDbPath = path.join('/tmp', 'hms.db');
+  try {
+    if (!fs.existsSync(tmpDbPath)) {
+      const sourceDb = path.join(__dirname, 'hms.db');
+      if (fs.existsSync(sourceDb)) {
+        fs.copyFileSync(sourceDb, tmpDbPath);
+      }
+    }
+    dbFilePath = tmpDbPath;
+  } catch (e) {
+    console.warn('Vercel /tmp copy warning:', e);
+  }
+}
 
 function getSqliteDb() {
   if (!sqliteDb) {
