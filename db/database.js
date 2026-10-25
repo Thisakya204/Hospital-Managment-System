@@ -5,9 +5,11 @@ let mssqlDriver = null;
 let useMssql = false;
 let poolPromise = null;
 let sqliteDb = null;
+let wasmDb = null;
+let isWasm = false;
 
 // Determine if we should attempt MS SQL Server
-const isExplicitSqlite = process.env.DB_ENGINE === 'sqlite';
+const isExplicitSqlite = process.env.DB_ENGINE === 'sqlite' || process.env.VERCEL;
 const isWindows = process.platform === 'win32';
 
 if (!isExplicitSqlite && isWindows) {
@@ -22,8 +24,7 @@ const mssqlConfig = {
   connectionString: process.env.MSSQL_CONNECTION_STRING || 'Driver={ODBC Driver 17 for SQL Server};Server=.\\SQLEXPRESS;Database=HospitalManagementDB;Trusted_Connection=yes;'
 };
 
-// SQLite setup
-const sqlite3 = require('sqlite3').verbose();
+// Database file path handling (support /tmp on Vercel)
 let dbFilePath = process.env.SQLITE_PATH || path.join(__dirname, 'hms.db');
 
 if (process.env.VERCEL) {
@@ -39,17 +40,6 @@ if (process.env.VERCEL) {
   } catch (e) {
     console.warn('Vercel /tmp copy warning:', e);
   }
-}
-
-function getSqliteDb() {
-  if (!sqliteDb) {
-    sqliteDb = new sqlite3.Database(dbFilePath, (err) => {
-      if (err) {
-        console.error('❌ Failed to open SQLite database:', err);
-      }
-    });
-  }
-  return sqliteDb;
 }
 
 // Convert SQLite queries to MS SQL Server
@@ -96,7 +86,6 @@ function processQueryForSqlite(sqlStr) {
 
   // Remove MS SQL specific IF OBJECT_ID or COL_LENGTH queries gracefully
   if (/IF\s+OBJECT_ID/i.test(s) || /IF\s+COL_LENGTH/i.test(s)) {
-    // If it's a DDL create, let it be handled or skipped
     return null;
   }
 
@@ -110,47 +99,86 @@ async function getPool() {
   return poolPromise;
 }
 
+// Initialize sql.js (WebAssembly SQLite)
+async function initWasmDb() {
+  if (!wasmDb) {
+    const initSqlJs = require('sql.js');
+    const SQL = await initSqlJs();
+    let fileBuffer;
+    if (fs.existsSync(dbFilePath)) {
+      fileBuffer = fs.readFileSync(dbFilePath);
+    } else {
+      const rootDb = path.join(__dirname, 'hms.db');
+      fileBuffer = fs.readFileSync(rootDb);
+    }
+    wasmDb = new SQL.Database(fileBuffer);
+    isWasm = true;
+  }
+  return wasmDb;
+}
+
+function persistWasmDb() {
+  if (isWasm && wasmDb && process.env.VERCEL) {
+    try {
+      const data = wasmDb.export();
+      fs.writeFileSync(dbFilePath, Buffer.from(data));
+    } catch (e) {
+      // Ignore
+    }
+  }
+}
+
 // Run (INSERT, UPDATE, DELETE)
 async function run(sqlStr, params = []) {
   if (useMssql) {
-    try {
-      const pool = await getPool();
-      const request = pool.request();
-      const { transformedSql, paramNames } = processQueryForMssql(sqlStr, params);
+    const pool = await getPool();
+    const request = pool.request();
+    const { transformedSql, paramNames } = processQueryForMssql(sqlStr, params);
 
-      paramNames.forEach((name, idx) => {
-        let val = params[idx];
-        if (val === undefined) val = null;
-        request.input(name, val);
-      });
+    paramNames.forEach((name, idx) => {
+      let val = params[idx];
+      if (val === undefined) val = null;
+      request.input(name, val);
+    });
 
-      let finalSql = transformedSql;
-      const isInsert = /^\s*INSERT\s+INTO/i.test(sqlStr);
-      if (isInsert && !/SCOPE_IDENTITY/i.test(finalSql)) {
-        finalSql += '; SELECT SCOPE_IDENTITY() AS lastID;';
-      }
-
-      const result = await request.query(finalSql);
-      let lastID = null;
-      if (isInsert && result.recordset && result.recordset[0]) {
-        lastID = result.recordset[0].lastID;
-      }
-      return { lastID, rowsAffected: result.rowsAffected ? result.rowsAffected[0] : 0 };
-    } catch (err) {
-      console.warn('MS SQL run failed, checking SQLite fallback:', err.message);
-      throw err;
+    let finalSql = transformedSql;
+    const isInsert = /^\s*INSERT\s+INTO/i.test(sqlStr);
+    if (isInsert && !/SCOPE_IDENTITY/i.test(finalSql)) {
+      finalSql += '; SELECT SCOPE_IDENTITY() AS lastID;';
     }
+
+    const result = await request.query(finalSql);
+    let lastID = null;
+    if (isInsert && result.recordset && result.recordset[0]) {
+      lastID = result.recordset[0].lastID;
+    }
+    return { lastID, rowsAffected: result.rowsAffected ? result.rowsAffected[0] : 0 };
   }
 
-  // SQLite execution
-  return new Promise((resolve, reject) => {
-    const cleanSql = processQueryForSqlite(sqlStr);
-    if (!cleanSql) {
-      return resolve({ lastID: null, rowsAffected: 0 });
-    }
+  const cleanSql = processQueryForSqlite(sqlStr);
+  if (!cleanSql) {
+    return { lastID: null, rowsAffected: 0 };
+  }
 
-    const db = getSqliteDb();
-    db.run(cleanSql, params, function (err) {
+  // Wasm SQLite mode (runs reliably everywhere without GLIBC issues)
+  if (isWasm) {
+    const db = await initWasmDb();
+    db.run(cleanSql, params);
+    let lastID = null;
+    try {
+      const lastIdRes = db.exec('SELECT last_insert_rowid() AS id');
+      if (lastIdRes && lastIdRes[0] && lastIdRes[0].values[0]) {
+        lastID = lastIdRes[0].values[0][0];
+      }
+    } catch (e) {}
+    const rowsAffected = db.getRowsModified();
+    persistWasmDb();
+    return { lastID, rowsAffected };
+  }
+
+  // Native sqlite3 mode
+  return new Promise((resolve, reject) => {
+    sqliteDb.run(cleanSql, params, function (err) {
       if (err) return reject(err);
       resolve({ lastID: this.lastID, rowsAffected: this.changes });
     });
@@ -174,13 +202,25 @@ async function get(sqlStr, params = []) {
     return result.recordset && result.recordset.length > 0 ? result.recordset[0] : null;
   }
 
-  // SQLite execution
-  return new Promise((resolve, reject) => {
-    const cleanSql = processQueryForSqlite(sqlStr);
-    if (!cleanSql) return resolve(null);
+  const cleanSql = processQueryForSqlite(sqlStr);
+  if (!cleanSql) return null;
 
-    const db = getSqliteDb();
-    db.get(cleanSql, params, (err, row) => {
+  // Wasm SQLite mode
+  if (isWasm) {
+    const db = await initWasmDb();
+    const stmt = db.prepare(cleanSql);
+    if (params && params.length > 0) stmt.bind(params);
+    let row = null;
+    if (stmt.step()) {
+      row = stmt.getAsObject();
+    }
+    stmt.free();
+    return row;
+  }
+
+  // Native sqlite3 mode
+  return new Promise((resolve, reject) => {
+    sqliteDb.get(cleanSql, params, (err, row) => {
       if (err) return reject(err);
       resolve(row || null);
     });
@@ -204,95 +244,28 @@ async function all(sqlStr, params = []) {
     return result.recordset || [];
   }
 
-  // SQLite execution
-  return new Promise((resolve, reject) => {
-    const cleanSql = processQueryForSqlite(sqlStr);
-    if (!cleanSql) return resolve([]);
+  const cleanSql = processQueryForSqlite(sqlStr);
+  if (!cleanSql) return [];
 
-    const db = getSqliteDb();
-    db.all(cleanSql, params, (err, rows) => {
+  // Wasm SQLite mode
+  if (isWasm) {
+    const db = await initWasmDb();
+    const stmt = db.prepare(cleanSql);
+    if (params && params.length > 0) stmt.bind(params);
+    const rows = [];
+    while (stmt.step()) {
+      rows.push(stmt.getAsObject());
+    }
+    stmt.free();
+    return rows;
+  }
+
+  // Native sqlite3 mode
+  return new Promise((resolve, reject) => {
+    sqliteDb.all(cleanSql, params, (err, rows) => {
       if (err) return reject(err);
       resolve(rows || []);
     });
-  });
-}
-
-// Ensure essential tables in SQLite exist
-function initSqliteTables(db) {
-  db.serialize(() => {
-    db.run(`
-      CREATE TABLE IF NOT EXISTS departments (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        dept_code TEXT UNIQUE NOT NULL,
-        name TEXT NOT NULL,
-        head_doctor_id INTEGER,
-        description TEXT,
-        phone TEXT,
-        location_floor TEXT,
-        status TEXT DEFAULT 'Active',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    db.run(`
-      CREATE TABLE IF NOT EXISTS admissions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        patient_id INTEGER NOT NULL,
-        doctor_id INTEGER NOT NULL,
-        department_id INTEGER,
-        room_no TEXT NOT NULL,
-        bed_no TEXT NOT NULL,
-        admission_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        discharge_date DATETIME,
-        admission_type TEXT DEFAULT 'Normal',
-        status TEXT DEFAULT 'Admitted',
-        notes TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    db.run(`
-      CREATE TABLE IF NOT EXISTS payments (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        payment_number TEXT UNIQUE NOT NULL,
-        invoice_id INTEGER NOT NULL,
-        patient_id INTEGER NOT NULL,
-        amount REAL NOT NULL,
-        payment_method TEXT NOT NULL,
-        transaction_ref TEXT,
-        payment_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-        received_by TEXT,
-        notes TEXT
-      )
-    `);
-
-    db.run(`
-      CREATE TABLE IF NOT EXISTS patient_documents (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        patient_id INTEGER NOT NULL,
-        document_name TEXT NOT NULL,
-        document_type TEXT DEFAULT 'General',
-        file_url TEXT,
-        file_size TEXT,
-        notes TEXT,
-        uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    db.run(`
-      CREATE TABLE IF NOT EXISTS staff_leaves (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        staff_id INTEGER NOT NULL,
-        leave_type TEXT NOT NULL,
-        start_date TEXT NOT NULL,
-        end_date TEXT NOT NULL,
-        reason TEXT,
-        status TEXT DEFAULT 'Pending',
-        applied_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        approved_by TEXT,
-        approved_at DATETIME
-      )
-    `);
   });
 }
 
@@ -311,14 +284,40 @@ async function initDB() {
     }
   }
 
-  // Fallback to SQLite
   useMssql = false;
-  const db = getSqliteDb();
-  initSqliteTables(db);
-  console.log('=======================================================');
-  console.log(`✅ Connected to SQLite Database (${path.basename(dbFilePath)})`);
-  console.log('🚀 Ready for 24/7 standalone cloud deployment');
-  console.log('=======================================================');
+
+  // On Vercel, always use pure WebAssembly sql.js (zero native compilation / zero GLIBC dependency)
+  if (process.env.VERCEL) {
+    try {
+      await initWasmDb();
+      console.log('=======================================================');
+      console.log('✅ Connected to WebAssembly SQLite Database (sql.js)');
+      console.log('🚀 Zero-native dependency engine active for Vercel Cloud');
+      console.log('=======================================================');
+      return;
+    } catch (err) {
+      console.error('WASM DB init failed:', err);
+    }
+  }
+
+  // Native sqlite3 on regular servers/development
+  try {
+    const sqlite3 = require('sqlite3').verbose();
+    await new Promise((resolve, reject) => {
+      sqliteDb = new sqlite3.Database(dbFilePath, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+    isWasm = false;
+    console.log('=======================================================');
+    console.log(`✅ Connected to SQLite Database (${path.basename(dbFilePath)})`);
+    console.log('=======================================================');
+  } catch (nativeErr) {
+    console.warn('Native sqlite3 unavailable, falling back to WebAssembly sql.js:', nativeErr.message);
+    await initWasmDb();
+    console.log('✅ Connected to WebAssembly SQLite Database (sql.js)');
+  }
 }
 
 module.exports = {
