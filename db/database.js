@@ -103,7 +103,15 @@ async function getPool() {
 async function initWasmDb() {
   if (!wasmDb) {
     const initSqlJs = require('sql.js');
-    const SQL = await initSqlJs();
+    const wasmFile = path.join(__dirname, 'sql-wasm.wasm');
+    const SQL = await initSqlJs({
+      locateFile: file => {
+        if (file.endsWith('.wasm') && fs.existsSync(wasmFile)) {
+          return wasmFile;
+        }
+        return file;
+      }
+    });
     let fileBuffer;
     if (fs.existsSync(dbFilePath)) {
       fileBuffer = fs.readFileSync(dbFilePath);
