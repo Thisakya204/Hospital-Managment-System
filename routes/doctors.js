@@ -14,21 +14,76 @@ router.get('/', verifyToken, async (req, res) => {
   }
 });
 
+// Doctor validation helper
+function validateDoctorInput(body) {
+  let { full_name, specialization, department, consultation_fee } = body;
+  if (!full_name || typeof full_name !== 'string' || !full_name.trim()) {
+    return 'Doctor full name is required';
+  }
+  const cleanName = full_name.trim();
+  if (cleanName.length < 3) {
+    return 'Doctor name must be at least 3 characters long';
+  }
+  if (/\d/.test(cleanName)) {
+    return 'Doctor name must contain letters only, numbers are not allowed (e.g. Dr. Kasun Fernando)';
+  }
+  if (!/^[a-zA-Z\s\.\-']+$/.test(cleanName)) {
+    return 'Doctor name contains invalid characters. Use letters, dots, hyphens, and spaces only';
+  }
+  if (!specialization || typeof specialization !== 'string' || !specialization.trim()) {
+    return 'Specialization is required';
+  }
+  const cleanSpec = specialization.trim();
+  if (cleanSpec.length < 3 || /^(.)\1+$/i.test(cleanSpec)) {
+    return 'Please select or enter a valid medical specialization (e.g. Cardiology)';
+  }
+  if (!department || typeof department !== 'string' || !department.trim()) {
+    return 'Department is required';
+  }
+  const fee = parseFloat(consultation_fee);
+  if (isNaN(fee) || fee <= 0) {
+    return 'Consultation fee must be a positive amount greater than 0';
+  }
+  return null;
+}
+
+// Format doctor name and room
+function formatDoctorData(body) {
+  let name = (body.full_name || '').trim();
+  if (!/^dr[\.\s]/i.test(name)) {
+    name = `Dr. ${name}`;
+  }
+  let room = (body.room_no || '').trim();
+  if (/^\d+$/.test(room)) {
+    room = `Room ${room}`;
+  } else if (!room) {
+    room = 'Room 101';
+  }
+  return {
+    formattedName: name,
+    formattedRoom: room,
+    fee: parseFloat(body.consultation_fee)
+  };
+}
+
 // Add Doctor Profile
 router.post('/', verifyToken, authorizeRoles('Administrator'), async (req, res) => {
   try {
-    const { user_id, full_name, specialization, qualification, department, consultation_fee, room_no, availability } = req.body;
-    if (!full_name || !specialization || !department || !consultation_fee) {
-      return res.status(400).json({ error: 'Required: full_name, specialization, department, consultation_fee' });
+    const error = validateDoctorInput(req.body);
+    if (error) {
+      return res.status(400).json({ error });
     }
+
+    const { user_id, specialization, qualification, department, availability } = req.body;
+    const { formattedName, formattedRoom, fee } = formatDoctorData(req.body);
 
     const result = await run(
       `INSERT INTO doctors (user_id, full_name, specialization, qualification, department, consultation_fee, room_no, availability)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [user_id || null, full_name, specialization, qualification || '', department, consultation_fee, room_no || 'TBD', availability || 'Mon-Fri 09:00 - 17:00']
+      [user_id || null, formattedName, specialization.trim(), qualification ? qualification.trim() : '', department.trim(), fee, formattedRoom, availability || 'Mon-Fri 09:00 - 17:00']
     );
 
-    await logAudit(req.user, 'ADD_DOCTOR', 'Doctor Management', `Added doctor ${full_name} (${specialization})`);
+    await logAudit(req.user, 'ADD_DOCTOR', 'Doctor Management', `Added doctor ${formattedName} (${specialization})`);
     res.status(201).json({ message: 'Doctor added successfully', doctorId: result.lastID });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -38,14 +93,55 @@ router.post('/', verifyToken, authorizeRoles('Administrator'), async (req, res) 
 // Update Doctor Details
 router.put('/:id', verifyToken, authorizeRoles('Administrator', 'Doctor'), async (req, res) => {
   try {
-    const { full_name, specialization, qualification, department, consultation_fee, room_no, availability } = req.body;
+    const error = validateDoctorInput(req.body);
+    if (error) {
+      return res.status(400).json({ error });
+    }
+
+    const { specialization, qualification, department, availability } = req.body;
+    const { formattedName, formattedRoom, fee } = formatDoctorData(req.body);
+
     await run(
       `UPDATE doctors SET full_name = ?, specialization = ?, qualification = ?, department = ?, consultation_fee = ?, room_no = ?, availability = ? WHERE id = ?`,
-      [full_name, specialization, qualification, department, consultation_fee, room_no, availability, req.params.id]
+      [formattedName, specialization.trim(), qualification ? qualification.trim() : '', department.trim(), fee, formattedRoom, availability, req.params.id]
     );
 
-    await logAudit(req.user, 'UPDATE_DOCTOR', 'Doctor Management', `Updated doctor ID ${req.params.id}`);
+    await logAudit(req.user, 'UPDATE_DOCTOR', 'Doctor Management', `Updated doctor ID ${req.params.id} (${formattedName})`);
     res.json({ message: 'Doctor updated successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete Doctor Profile (Admin only)
+router.delete('/:id', verifyToken, authorizeRoles('Administrator'), async (req, res) => {
+  try {
+    const doctorId = req.params.id;
+    const doctor = await get('SELECT * FROM doctors WHERE id = ?', [doctorId]);
+    if (!doctor) {
+      return res.status(404).json({ error: 'Doctor not found' });
+    }
+
+    // Check for active linked appointments or medical records
+    const appts = await get('SELECT COUNT(*) AS total FROM appointments WHERE doctor_id = ?', [doctorId]);
+    const apptCount = appts ? (appts.total !== undefined ? appts.total : appts['total'] || 0) : 0;
+
+    const records = await get('SELECT COUNT(*) AS total FROM medical_records WHERE doctor_id = ?', [doctorId]);
+    const recordCount = records ? (records.total !== undefined ? records.total : records['total'] || 0) : 0;
+
+    if (apptCount > 0 || recordCount > 0) {
+      return res.status(400).json({
+        error: `Cannot delete doctor "${doctor.full_name}" because they have ${apptCount} appointment(s) and ${recordCount} medical record(s) linked.`
+      });
+    }
+
+    // Clean up doctor schedule & department head reference
+    await run(`DELETE FROM doctor_schedules WHERE doctor_id = ?`, [doctorId]);
+    await run(`UPDATE departments SET head_doctor_id = NULL WHERE head_doctor_id = ?`, [doctorId]);
+    await run(`DELETE FROM doctors WHERE id = ?`, [doctorId]);
+
+    await logAudit(req.user, 'DELETE_DOCTOR', 'Doctor Management', `Deleted doctor ${doctor.full_name} (ID: ${doctorId})`);
+    res.json({ message: `Doctor ${doctor.full_name} deleted successfully` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

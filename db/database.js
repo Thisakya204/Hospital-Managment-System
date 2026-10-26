@@ -126,12 +126,12 @@ async function initWasmDb() {
 }
 
 function persistWasmDb() {
-  if (isWasm && wasmDb && process.env.VERCEL) {
+  if (isWasm && wasmDb) {
     try {
       const data = wasmDb.export();
       fs.writeFileSync(dbFilePath, Buffer.from(data));
     } catch (e) {
-      // Ignore
+      // Ignore or log error
     }
   }
 }

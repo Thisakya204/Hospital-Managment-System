@@ -395,19 +395,48 @@ function getAge(dobStr) {
   return Math.abs(new Date(diff).getUTCFullYear() - 1970);
 }
 
+function validatePatientForm(payload) {
+  const name = (payload.full_name || '').trim();
+  if (!name || name.length < 3) {
+    alert('Please enter a patient full name with at least 3 characters.');
+    return false;
+  }
+  if (/\d/.test(name)) {
+    alert('Patient name cannot contain numbers (e.g. John Silva).');
+    return false;
+  }
+  if (!payload.phone) {
+    alert('Phone number is required.');
+    return false;
+  }
+  const cleanPhone = String(payload.phone).trim();
+  const digits = cleanPhone.replace(/\D/g, '');
+  if (digits.length < 9 || digits.length > 15) {
+    alert('Please enter a valid phone number with 9-15 digits (e.g. 0712345678).');
+    return false;
+  }
+  if (/^(\d)\1+$/.test(digits)) {
+    alert('Invalid phone number: cannot consist of all identical repeating digits.');
+    return false;
+  }
+  return true;
+}
+
 async function submitPatient(e) {
   e.preventDefault();
   try {
     const payload = {
-      full_name: document.getElementById('patient-name').value,
+      full_name: document.getElementById('patient-name').value.trim(),
       dob: document.getElementById('patient-dob').value,
       gender: document.getElementById('patient-gender').value,
-      phone: document.getElementById('patient-phone').value,
+      phone: document.getElementById('patient-phone').value.trim(),
       blood_group: document.getElementById('patient-blood').value,
-      address: document.getElementById('patient-address').value,
-      emergency_contact: document.getElementById('patient-emergency').value,
-      allergies: document.getElementById('patient-allergies').value
+      address: document.getElementById('patient-address').value.trim(),
+      emergency_contact: document.getElementById('patient-emergency').value.trim(),
+      allergies: document.getElementById('patient-allergies').value.trim()
     };
+
+    if (!validatePatientForm(payload)) return;
 
     await authFetch('/patients', { method: 'POST', body: payload });
     closeModal('modal-patient');
@@ -536,15 +565,17 @@ async function submitUpdatePatient(e) {
   try {
     const id = document.getElementById('edit-patient-id').value;
     const payload = {
-      full_name: document.getElementById('edit-patient-name').value,
+      full_name: document.getElementById('edit-patient-name').value.trim(),
       dob: document.getElementById('edit-patient-dob').value,
       gender: document.getElementById('edit-patient-gender').value,
-      phone: document.getElementById('edit-patient-phone').value,
+      phone: document.getElementById('edit-patient-phone').value.trim(),
       blood_group: document.getElementById('edit-patient-blood').value,
-      address: document.getElementById('edit-patient-address').value,
-      emergency_contact: document.getElementById('edit-patient-emergency').value,
-      allergies: document.getElementById('edit-patient-allergies').value
+      address: document.getElementById('edit-patient-address').value.trim(),
+      emergency_contact: document.getElementById('edit-patient-emergency').value.trim(),
+      allergies: document.getElementById('edit-patient-allergies').value.trim()
     };
+
+    if (!validatePatientForm(payload)) return;
 
     await authFetch(`/patients/${id}`, { method: 'PUT', body: payload });
     closeModal('modal-edit-patient');
@@ -567,7 +598,7 @@ async function fetchDoctors() {
           <td><span class="badge badge-blue">${d.specialization}</span></td>
           <td>${d.department}</td>
           <td>${d.room_no}</td>
-          <td>Rs. ${d.consultation_fee.toLocaleString()}</td>
+          <td>Rs. ${d.consultation_fee ? Number(d.consultation_fee).toLocaleString() : '0'}</td>
           <td>${d.availability}</td>
           <td>
             <div style="display: flex; gap: 0.35rem;">
@@ -576,6 +607,9 @@ async function fetchDoctors() {
               </button>
               <button class="btn-action btn-secondary" style="padding: 0.25rem 0.55rem; font-size: 0.78rem; border-color: var(--primary); color: var(--primary);" onclick="openDoctorScheduleModal(${d.id}, '${d.full_name.replace(/'/g, "\\'").replace(/"/g, '&quot;')}')">
                 📅 Schedule
+              </button>
+              <button class="btn-action btn-secondary" style="padding: 0.25rem 0.55rem; font-size: 0.78rem; border-color: #fca5a5; color: #dc2626; background: #fff5f5;" onclick="deleteDoctor(${d.id}, '${d.full_name.replace(/'/g, "\\'").replace(/"/g, '&quot;')}')">
+                🗑️ Delete
               </button>
             </div>
           </td>
@@ -595,18 +629,46 @@ async function fetchDoctors() {
   }
 }
 
+// Client-side doctor validation
+function validateDoctorForm(payload) {
+  const name = (payload.full_name || '').trim();
+  if (!name || name.length < 3) {
+    alert('Please enter a doctor name with at least 3 characters.');
+    return false;
+  }
+  if (/\d/.test(name)) {
+    alert('Doctor name cannot contain numbers (e.g., "23444444" is invalid). Please enter a valid name like Dr. Sarah Smith.');
+    return false;
+  }
+  if (!payload.specialization) {
+    alert('Please select a valid medical specialization.');
+    return false;
+  }
+  if (!payload.department) {
+    alert('Please select a department.');
+    return false;
+  }
+  if (isNaN(payload.consultation_fee) || payload.consultation_fee < 50) {
+    alert('Please enter a valid consultation fee of at least Rs. 50.');
+    return false;
+  }
+  return true;
+}
+
 async function submitDoctor(e) {
   e.preventDefault();
   try {
     const payload = {
-      full_name: document.getElementById('doc-full-name').value,
+      full_name: document.getElementById('doc-full-name').value.trim(),
       specialization: document.getElementById('doc-specialization').value,
-      qualification: document.getElementById('doc-qualification').value,
+      qualification: document.getElementById('doc-qualification').value.trim(),
       department: document.getElementById('doc-department').value,
-      room_no: document.getElementById('doc-room').value,
+      room_no: document.getElementById('doc-room').value.trim(),
       consultation_fee: parseFloat(document.getElementById('doc-fee').value),
-      availability: document.getElementById('doc-availability').value
+      availability: document.getElementById('doc-availability').value.trim()
     };
+
+    if (!validateDoctorForm(payload)) return;
 
     await authFetch('/doctors', { method: 'POST', body: payload });
     closeModal('modal-doctor');
@@ -621,11 +683,22 @@ async function submitDoctor(e) {
 function openEditDoctorModal(id, full_name, specialization, qualification, department, consultation_fee, room_no, availability) {
   document.getElementById('edit-doc-id').value = id;
   document.getElementById('edit-doc-full-name').value = full_name;
-  document.getElementById('edit-doc-specialization').value = specialization;
   document.getElementById('edit-doc-qualification').value = qualification;
   document.getElementById('edit-doc-room').value = room_no;
   document.getElementById('edit-doc-fee').value = consultation_fee;
   document.getElementById('edit-doc-availability').value = availability;
+
+  // Set specialization dropdown
+  const specSelect = document.getElementById('edit-doc-specialization');
+  if (specSelect) {
+    specSelect.value = specialization;
+    for (let opt of specSelect.options) {
+      if (opt.value.toLowerCase() === (specialization || '').toLowerCase()) {
+        opt.selected = true;
+        break;
+      }
+    }
+  }
 
   // Set department dropdown
   const deptSelect = document.getElementById('edit-doc-department');
@@ -641,14 +714,16 @@ async function submitUpdateDoctor(e) {
   try {
     const id = document.getElementById('edit-doc-id').value;
     const payload = {
-      full_name: document.getElementById('edit-doc-full-name').value,
+      full_name: document.getElementById('edit-doc-full-name').value.trim(),
       specialization: document.getElementById('edit-doc-specialization').value,
-      qualification: document.getElementById('edit-doc-qualification').value,
+      qualification: document.getElementById('edit-doc-qualification').value.trim(),
       department: document.getElementById('edit-doc-department').value,
-      room_no: document.getElementById('edit-doc-room').value,
+      room_no: document.getElementById('edit-doc-room').value.trim(),
       consultation_fee: parseFloat(document.getElementById('edit-doc-fee').value),
-      availability: document.getElementById('edit-doc-availability').value
+      availability: document.getElementById('edit-doc-availability').value.trim()
     };
+
+    if (!validateDoctorForm(payload)) return;
 
     await authFetch(`/doctors/${id}`, { method: 'PUT', body: payload });
     closeModal('modal-edit-doctor');
@@ -656,6 +731,19 @@ async function submitUpdateDoctor(e) {
     alert('Doctor details updated successfully!');
   } catch (err) {
     alert(`Update Error: ${err.message}`);
+  }
+}
+
+async function deleteDoctor(id, name) {
+  if (!confirm(`Are you sure you want to delete doctor "${name}"? This action cannot be undone.`)) {
+    return;
+  }
+  try {
+    const res = await authFetch(`/doctors/${id}`, { method: 'DELETE' });
+    alert(res.message || `Doctor ${name} deleted successfully!`);
+    fetchDoctors();
+  } catch (err) {
+    alert(`Delete Error: ${err.message}`);
   }
 }
 
@@ -1266,27 +1354,81 @@ async function fetchStaff() {
   try {
     const staff = await authFetch('/staff');
     const body = document.getElementById('staff-table-body');
-    body.innerHTML = staff.map(s => `
-      <tr>
-        <td><strong>${s.employee_id}</strong></td>
-        <td><strong>${s.full_name}</strong></td>
-        <td><span class="badge badge-blue">${s.role}</span></td>
-        <td>${s.department}</td>
-        <td>${s.phone}</td>
-        <td>Rs. ${s.salary ? s.salary.toLocaleString() : '0'}</td>
-        <td>${s.joining_date}</td>
-        <td>
-          <button class="btn-action btn-secondary" style="padding: 0.25rem 0.65rem; font-size: 0.78rem;" onclick="openEditStaffModal(${s.id}, '${s.full_name.replace(/'/g, "\\'").replace(/"/g, '&quot;')}', '${s.role}', '${s.department}', '${s.phone || ''}', ${s.salary || 0})">
-            ✏️ Edit
-          </button>
-        </td>
-      </tr>
-    `).join('');
+    if (body) {
+      body.innerHTML = staff.map(s => {
+        let displayDate = s.joining_date || '-';
+        if (typeof displayDate === 'string' && displayDate.includes('T')) {
+          displayDate = displayDate.split('T')[0];
+        }
+        return `
+          <tr>
+            <td><strong>${s.employee_id}</strong></td>
+            <td><strong>${s.full_name}</strong></td>
+            <td><span class="badge badge-blue">${s.role}</span></td>
+            <td>${s.department}</td>
+            <td style="white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis;" title="${s.phone || ''}">${s.phone || '-'}</td>
+            <td>Rs. ${s.salary ? Number(s.salary).toLocaleString() : '0'}</td>
+            <td>${displayDate}</td>
+            <td>
+              <div style="display: flex; gap: 0.35rem;">
+                <button class="btn-action btn-secondary" style="padding: 0.25rem 0.55rem; font-size: 0.78rem;" onclick="openEditStaffModal(${s.id}, '${s.full_name.replace(/'/g, "\\'").replace(/"/g, '&quot;')}', '${s.role}', '${s.department}', '${s.phone || ''}', ${s.salary || 0})">
+                  ✏️ Edit
+                </button>
+                <button class="btn-action btn-secondary" style="padding: 0.25rem 0.55rem; font-size: 0.78rem; border-color: #fca5a5; color: #dc2626; background: #fff5f5;" onclick="deleteStaff(${s.id}, '${s.full_name.replace(/'/g, "\\'").replace(/"/g, '&quot;')}', '${s.employee_id}')">
+                  🗑️ Delete
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
 
     populateSelectOptions('att-staff-id', staff, 'id', 'full_name');
   } catch (err) {
     console.error('Staff error:', err);
   }
+}
+
+// Client-side staff validation
+function validateStaffForm(payload) {
+  const name = (payload.full_name || '').trim();
+  if (!name || name.length < 3) {
+    alert('Please enter a staff name with at least 3 characters.');
+    return false;
+  }
+  if (/\d/.test(name)) {
+    alert('Staff name cannot contain numbers (e.g., "ttt1111111" is invalid). Please enter a valid name like Nimal Perera.');
+    return false;
+  }
+  if (!payload.role) {
+    alert('Please select a staff role.');
+    return false;
+  }
+  if (!payload.department) {
+    alert('Please select a department.');
+    return false;
+  }
+  if (payload.phone) {
+    const cleanPhone = String(payload.phone).trim();
+    const digitsOnly = cleanPhone.replace(/\D/g, '');
+    if (digitsOnly.length < 9 || digitsOnly.length > 15) {
+      alert('Please enter a valid phone number with 9-15 digits (e.g. 0712345678).');
+      return false;
+    }
+    if (/^(\d)\1+$/.test(digitsOnly)) {
+      alert('Invalid phone number: cannot consist of all identical repeating digits.');
+      return false;
+    }
+  } else {
+    alert('Phone number is required.');
+    return false;
+  }
+  if (isNaN(payload.salary) || payload.salary < 1000) {
+    alert('Please enter a valid monthly salary of at least Rs. 1,000.');
+    return false;
+  }
+  return true;
 }
 
 async function submitStaffAttendance(e) {
@@ -1311,13 +1453,15 @@ async function submitStaff(e) {
   e.preventDefault();
   try {
     const payload = {
-      full_name: document.getElementById('staff-full-name').value,
+      full_name: document.getElementById('staff-full-name').value.trim(),
       role: document.getElementById('staff-role').value,
       department: document.getElementById('staff-department').value,
-      phone: document.getElementById('staff-phone').value,
+      phone: document.getElementById('staff-phone').value.trim(),
       salary: parseFloat(document.getElementById('staff-salary').value) || 0,
       joining_date: document.getElementById('staff-joining-date').value
     };
+
+    if (!validateStaffForm(payload)) return;
 
     await authFetch('/staff', { method: 'POST', body: payload });
     closeModal('modal-staff');
@@ -1349,12 +1493,14 @@ async function submitUpdateStaff(e) {
   try {
     const id = document.getElementById('edit-staff-id').value;
     const payload = {
-      full_name: document.getElementById('edit-staff-full-name').value,
+      full_name: document.getElementById('edit-staff-full-name').value.trim(),
       role: document.getElementById('edit-staff-role').value,
       department: document.getElementById('edit-staff-department').value,
-      phone: document.getElementById('edit-staff-phone').value,
+      phone: document.getElementById('edit-staff-phone').value.trim(),
       salary: parseFloat(document.getElementById('edit-staff-salary').value) || 0
     };
+
+    if (!validateStaffForm(payload)) return;
 
     await authFetch(`/staff/${id}`, { method: 'PUT', body: payload });
     closeModal('modal-edit-staff');
@@ -1362,6 +1508,19 @@ async function submitUpdateStaff(e) {
     alert('Staff details updated successfully!');
   } catch (err) {
     alert(`Update Error: ${err.message}`);
+  }
+}
+
+async function deleteStaff(id, name, empId) {
+  if (!confirm(`Are you sure you want to delete staff member "${name}" (${empId})? This action cannot be undone.`)) {
+    return;
+  }
+  try {
+    const res = await authFetch(`/staff/${id}`, { method: 'DELETE' });
+    alert(res.message || `Staff member ${name} deleted successfully!`);
+    fetchStaff();
+  } catch (err) {
+    alert(`Delete Error: ${err.message}`);
   }
 }
 

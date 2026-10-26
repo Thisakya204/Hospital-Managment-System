@@ -14,23 +14,75 @@ router.get('/', verifyToken, authorizeRoles('Administrator', 'Accountant', 'Doct
   }
 });
 
+// Staff validation helper
+function validateStaffInput(body) {
+  let { full_name, role, department, phone, salary } = body;
+  if (!full_name || typeof full_name !== 'string' || !full_name.trim()) {
+    return 'Staff full name is required';
+  }
+  const cleanName = full_name.trim();
+  if (cleanName.length < 3) {
+    return 'Staff name must be at least 3 characters long';
+  }
+  if (/\d/.test(cleanName)) {
+    return 'Staff name must contain letters only, numbers are not allowed (e.g. Nimal Perera)';
+  }
+  if (!/^[a-zA-Z\s\.\-']+$/.test(cleanName)) {
+    return 'Staff name contains invalid characters. Use letters, dots, and spaces only';
+  }
+
+  if (!role || typeof role !== 'string' || !role.trim()) {
+    return 'Staff role is required';
+  }
+  if (!department || typeof department !== 'string' || !department.trim()) {
+    return 'Staff department is required';
+  }
+
+  if (phone) {
+    const cleanPhone = String(phone).trim();
+    const digitsOnly = cleanPhone.replace(/\D/g, '');
+    if (digitsOnly.length < 9 || digitsOnly.length > 15) {
+      return 'Please enter a valid phone number with 9-15 digits (e.g. 0712345678)';
+    }
+    if (/^(\d)\1+$/.test(digitsOnly)) {
+      return 'Phone number cannot consist of the same repeating digit';
+    }
+    if (!/^(?:\+?[0-9\s\-()]{9,18})$/.test(cleanPhone)) {
+      return 'Invalid phone number format';
+    }
+  }
+
+  if (salary !== undefined && salary !== null && salary !== '') {
+    const sal = parseFloat(salary);
+    if (isNaN(sal) || sal <= 0) {
+      return 'Monthly salary must be a positive amount (e.g. Rs. 35,000)';
+    }
+  }
+
+  return null;
+}
+
 // Add Staff Member (SSD 3.9 Employee Registration)
 router.post('/', verifyToken, authorizeRoles('Administrator'), async (req, res) => {
   try {
-    const { full_name, role, department, phone, salary, joining_date } = req.body;
-    if (!full_name || !role || !department) {
-      return res.status(400).json({ error: 'Required: full_name, role, department' });
+    const error = validateStaffInput(req.body);
+    if (error) {
+      return res.status(400).json({ error });
     }
 
+    const { full_name, role, department, phone, salary, joining_date } = req.body;
     const empId = `EMP-${Math.floor(100 + Math.random() * 900)}`;
+    const cleanPhone = phone ? String(phone).trim() : '';
+    const cleanSalary = salary ? parseFloat(salary) : 0;
+    const cleanJoiningDate = joining_date && joining_date.trim() ? joining_date.trim() : new Date().toISOString().split('T')[0];
 
     const result = await run(
       `INSERT INTO staff (employee_id, full_name, role, department, phone, salary, joining_date)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [empId, full_name, role, department, phone || '', salary || 0, joining_date || new Date().toISOString().split('T')[0]]
+      [empId, full_name.trim(), role.trim(), department.trim(), cleanPhone, cleanSalary, cleanJoiningDate]
     );
 
-    await logAudit(req.user, 'ADD_STAFF', 'Staff Management', `Added employee ${full_name} (${empId})`);
+    await logAudit(req.user, 'ADD_STAFF', 'Staff Management', `Added employee ${full_name.trim()} (${empId})`);
 
     res.status(201).json({ message: 'Staff registered successfully', staffId: result.lastID, employee_id: empId });
   } catch (err) {
@@ -122,16 +174,44 @@ router.put('/leave/:id', verifyToken, authorizeRoles('Administrator'), async (re
 // Update Staff Member Details
 router.put('/:id', verifyToken, authorizeRoles('Administrator'), async (req, res) => {
   try {
+    const error = validateStaffInput(req.body);
+    if (error) {
+      return res.status(400).json({ error });
+    }
+
     const staffId = req.params.id;
     const { full_name, role, department, phone, salary } = req.body;
+    const cleanPhone = phone ? String(phone).trim() : '';
+    const cleanSalary = salary ? parseFloat(salary) : 0;
 
     await run(
       `UPDATE staff SET full_name = ?, role = ?, department = ?, phone = ?, salary = ? WHERE id = ?`,
-      [full_name, role, department, phone || '', salary || 0, staffId]
+      [full_name.trim(), role.trim(), department.trim(), cleanPhone, cleanSalary, staffId]
     );
 
-    await logAudit(req.user, 'UPDATE_STAFF', 'Staff Management', `Updated staff member ID ${staffId} — ${full_name}`);
+    await logAudit(req.user, 'UPDATE_STAFF', 'Staff Management', `Updated staff member ID ${staffId} — ${full_name.trim()}`);
     res.json({ message: 'Staff details updated successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete Staff Member (Admin only)
+router.delete('/:id', verifyToken, authorizeRoles('Administrator'), async (req, res) => {
+  try {
+    const staffId = req.params.id;
+    const staff = await get('SELECT * FROM staff WHERE id = ?', [staffId]);
+    if (!staff) {
+      return res.status(404).json({ error: 'Staff member not found' });
+    }
+
+    // Clean up attendance and leaves if tables exist
+    try { await run(`DELETE FROM staff_attendance WHERE staff_id = ?`, [staffId]); } catch (e) {}
+    try { await run(`DELETE FROM staff_leaves WHERE staff_id = ?`, [staffId]); } catch (e) {}
+    await run(`DELETE FROM staff WHERE id = ?`, [staffId]);
+
+    await logAudit(req.user, 'DELETE_STAFF', 'Staff Management', `Deleted staff member ${staff.full_name} (${staff.employee_id})`);
+    res.json({ message: `Staff member ${staff.full_name} (${staff.employee_id}) deleted successfully` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

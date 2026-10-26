@@ -74,23 +74,63 @@ router.get('/:id', verifyToken, async (req, res) => {
   }
 });
 
+// Patient validation helper
+function validatePatientInput(body, isUpdate = false) {
+  const { full_name, dob, gender, phone } = body;
+  if (!isUpdate || full_name !== undefined) {
+    if (!full_name || typeof full_name !== 'string' || !full_name.trim()) {
+      return 'Patient full name is required';
+    }
+    const cleanName = full_name.trim();
+    if (cleanName.length < 3) {
+      return 'Patient name must be at least 3 characters';
+    }
+    if (/\d/.test(cleanName)) {
+      return 'Patient name cannot contain numbers (e.g. John Silva)';
+    }
+    if (!/^[a-zA-Z\s\.\-']+$/.test(cleanName)) {
+      return 'Patient name contains invalid characters. Use letters and spaces only';
+    }
+  }
+
+  if (!isUpdate) {
+    if (!dob) return 'Date of birth is required';
+    if (!gender) return 'Gender is required';
+    if (!phone) return 'Phone number is required';
+  }
+
+  if (phone) {
+    const cleanPhone = String(phone).trim();
+    const digits = cleanPhone.replace(/\D/g, '');
+    if (digits.length < 9 || digits.length > 15) {
+      return 'Please enter a valid phone number between 9 and 15 digits (e.g. 0712345678)';
+    }
+    if (/^(\d)\1+$/.test(digits)) {
+      return 'Phone number cannot consist of the same repeating digit';
+    }
+  }
+
+  return null;
+}
+
 // Register New Patient
 router.post('/', verifyToken, authorizeRoles('Administrator', 'Receptionist', 'Doctor', 'Nurse'), async (req, res) => {
   try {
-    const { full_name, dob, gender, phone, email, address, blood_group, emergency_contact, allergies } = req.body;
-    if (!full_name || !dob || !gender || !phone) {
-      return res.status(400).json({ error: 'Required fields: full_name, dob, gender, phone' });
+    const error = validatePatientInput(req.body);
+    if (error) {
+      return res.status(400).json({ error });
     }
 
+    const { full_name, dob, gender, phone, email, address, blood_group, emergency_contact, allergies } = req.body;
     const mrn = `MRN-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
 
     const result = await run(
       `INSERT INTO patients (mrn, full_name, dob, gender, phone, email, address, blood_group, emergency_contact, allergies)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [mrn, full_name, dob, gender, phone, email || '', address || '', blood_group || 'Unknown', emergency_contact || '', allergies || 'None']
+      [mrn, full_name.trim(), dob, gender, String(phone).trim(), email || '', address || '', blood_group || 'Unknown', emergency_contact || '', allergies || 'None']
     );
 
-    await logAudit(req.user, 'REGISTER_PATIENT', 'Patient Management', `Registered patient ${full_name} (${mrn})`);
+    await logAudit(req.user, 'REGISTER_PATIENT', 'Patient Management', `Registered patient ${full_name.trim()} (${mrn})`);
     res.status(201).json({ message: 'Patient registered successfully', patientId: result.lastID, mrn });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -100,6 +140,11 @@ router.post('/', verifyToken, authorizeRoles('Administrator', 'Receptionist', 'D
 // Update Patient Information (SSD 3.2 Update Patient Info)
 router.put('/:id', verifyToken, authorizeRoles('Administrator', 'Receptionist', 'Doctor', 'Nurse'), async (req, res) => {
   try {
+    const error = validatePatientInput(req.body, true);
+    if (error) {
+      return res.status(400).json({ error });
+    }
+
     const patientId = req.params.id;
     const { full_name, dob, gender, phone, email, address, blood_group, emergency_contact, allergies } = req.body;
 

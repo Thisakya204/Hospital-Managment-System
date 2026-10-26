@@ -1212,8 +1212,9 @@
       <form id="form-patient" onsubmit="submitPatient(event)">
         <div class="form-grid">
           <div class="form-group form-grid-full">
-            <label>Full Name</label>
-            <input type="text" id="patient-name" class="input-field" required placeholder="e.g. John Silva">
+            <label>Full Name <span style="color:var(--danger,#ef4444)">*</span></label>
+            <input type="text" id="patient-name" class="input-field" required placeholder="e.g. John Silva" pattern="^[A-Za-z\s\.\-']{3,60}$" title="Patient name must contain letters only (e.g. John Silva)">
+            <small style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Letters only, minimum 3 characters</small>
           </div>
           <div class="form-group">
             <label>Date of Birth</label>
@@ -1228,8 +1229,9 @@
             </select>
           </div>
           <div class="form-group">
-            <label>Phone Number</label>
-            <input type="tel" id="patient-phone" class="input-field" required placeholder="077...">
+            <label>Phone Number <span style="color:var(--danger,#ef4444)">*</span></label>
+            <input type="tel" id="patient-phone" class="input-field" required placeholder="0712345678" maxlength="15" pattern="^(?:0\d{9}|\+94\d{9}|\+?[1-9]\d{8,14})$" title="Valid phone number: 10 digits starting with 0 or +94 format (e.g. 0712345678)">
+            <small style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">10-digit mobile or international format</small>
           </div>
           <div class="form-group">
             <label>Blood Group</label>
@@ -1317,8 +1319,9 @@
         <input type="hidden" id="edit-patient-id">
         <div class="form-grid">
           <div class="form-group form-grid-full">
-            <label>Full Name</label>
-            <input type="text" id="edit-patient-name" class="input-field" required placeholder="e.g. Kamal Perera">
+            <label>Full Name <span style="color:var(--danger,#ef4444)">*</span></label>
+            <input type="text" id="edit-patient-name" class="input-field" required placeholder="e.g. Kamal Perera" pattern="^[A-Za-z\s\.\-']{3,60}$" title="Patient name must contain letters only (e.g. Kamal Perera)">
+            <small style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Letters only, minimum 3 characters</small>
           </div>
           <div class="form-group">
             <label>Date of Birth</label>
@@ -1333,8 +1336,9 @@
             </select>
           </div>
           <div class="form-group">
-            <label>Phone Number</label>
-            <input type="tel" id="edit-patient-phone" class="input-field" required placeholder="077...">
+            <label>Phone Number <span style="color:var(--danger,#ef4444)">*</span></label>
+            <input type="tel" id="edit-patient-phone" class="input-field" required placeholder="0712345678" maxlength="15" pattern="^(?:0\d{9}|\+94\d{9}|\+?[1-9]\d{8,14})$" title="Valid phone number: 10 digits starting with 0 or +94 format (e.g. 0712345678)">
+            <small style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">10-digit mobile or international format</small>
           </div>
           <div class="form-group">
             <label>Blood Group</label>
@@ -1380,19 +1384,42 @@
       <form id="form-doctor" onsubmit="submitDoctor(event)">
         <div class="form-grid">
           <div class="form-group form-grid-full">
-            <label>Full Name</label>
-            <input type="text" id="doc-full-name" class="input-field" required placeholder="e.g. Dr. Nimal Perera">
+            <label>Full Name <span style="color:var(--danger,#ef4444)">*</span></label>
+            <input type="text" id="doc-full-name" class="input-field" required placeholder="e.g. Dr. Nimal Perera" pattern="^[A-Za-z\s\.\-']{3,60}$" title="Doctor name must contain letters only (e.g. Dr. Sarah Smith)">
+            <small style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Letters only, minimum 3 characters</small>
           </div>
           <div class="form-group">
-            <label>Specialization</label>
-            <input type="text" id="doc-specialization" class="input-field" required placeholder="e.g. Cardiology">
+            <label>Specialization <span style="color:var(--danger,#ef4444)">*</span></label>
+            <select id="doc-specialization" class="select-field" required>
+              <option value="">-- Select Specialization --</option>
+              <option value="Cardiology">Cardiology</option>
+              <option value="Neurology">Neurology</option>
+              <option value="Pediatrics">Pediatrics</option>
+              <option value="Orthopedics">Orthopedics</option>
+              <option value="Gynecology">Gynecology</option>
+              <option value="Dermatology">Dermatology</option>
+              <option value="General Medicine">General Medicine</option>
+              <option value="Surgery">Surgery</option>
+              <option value="ENT">ENT (Otolaryngology)</option>
+              <option value="Ophthalmology">Ophthalmology</option>
+              <option value="Psychiatry">Psychiatry</option>
+              <option value="Radiology">Radiology</option>
+              <option value="Oncology">Oncology</option>
+              <option value="Nephrology">Nephrology</option>
+              <option value="Gastroenterology">Gastroenterology</option>
+              <option value="Pulmonology">Pulmonology</option>
+              <option value="Dental Surgery">Dental Surgery</option>
+              <option value="Emergency Medicine">Emergency Medicine</option>
+              <option value="Pathology">Pathology</option>
+              <option value="Anesthesiology">Anesthesiology</option>
+            </select>
           </div>
           <div class="form-group">
             <label>Qualification</label>
-            <input type="text" id="doc-qualification" class="input-field" placeholder="e.g. MBBS, MD">
+            <input type="text" id="doc-qualification" class="input-field" placeholder="e.g. MBBS, MD, FRCS">
           </div>
           <div class="form-group">
-            <label>Department</label>
+            <label>Department <span style="color:var(--danger,#ef4444)">*</span></label>
             <select id="doc-department" class="select-field" required>
               <option value="Cardiology">Cardiology</option>
               <option value="Neurology">Neurology</option>
@@ -1410,11 +1437,12 @@
           </div>
           <div class="form-group">
             <label>Room No.</label>
-            <input type="text" id="doc-room" class="input-field" placeholder="e.g. Room 301">
+            <input type="text" id="doc-room" class="input-field" placeholder="e.g. Room 301" pattern="^[A-Za-z0-9\s\-]+$" title="Room identifier (e.g. Room 301 or OPD-2)">
           </div>
           <div class="form-group">
-            <label>Consultation Fee (Rs.)</label>
-            <input type="number" id="doc-fee" class="input-field" required placeholder="150" min="0">
+            <label>Consultation Fee (Rs.) <span style="color:var(--danger,#ef4444)">*</span></label>
+            <input type="number" id="doc-fee" class="input-field" required placeholder="150" min="50" step="10">
+            <small style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Minimum fee Rs. 50</small>
           </div>
           <div class="form-group form-grid-full">
             <label>Availability</label>
@@ -1437,19 +1465,42 @@
         <input type="hidden" id="edit-doc-id">
         <div class="form-grid">
           <div class="form-group form-grid-full">
-            <label>Full Name</label>
-            <input type="text" id="edit-doc-full-name" class="input-field" required placeholder="e.g. Dr. Nimal Perera">
+            <label>Full Name <span style="color:var(--danger,#ef4444)">*</span></label>
+            <input type="text" id="edit-doc-full-name" class="input-field" required placeholder="e.g. Dr. Nimal Perera" pattern="^[A-Za-z\s\.\-']{3,60}$" title="Doctor name must contain letters only (e.g. Dr. Sarah Smith)">
+            <small style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Letters only, minimum 3 characters</small>
           </div>
           <div class="form-group">
-            <label>Specialization</label>
-            <input type="text" id="edit-doc-specialization" class="input-field" required placeholder="e.g. Cardiology">
+            <label>Specialization <span style="color:var(--danger,#ef4444)">*</span></label>
+            <select id="edit-doc-specialization" class="select-field" required>
+              <option value="">-- Select Specialization --</option>
+              <option value="Cardiology">Cardiology</option>
+              <option value="Neurology">Neurology</option>
+              <option value="Pediatrics">Pediatrics</option>
+              <option value="Orthopedics">Orthopedics</option>
+              <option value="Gynecology">Gynecology</option>
+              <option value="Dermatology">Dermatology</option>
+              <option value="General Medicine">General Medicine</option>
+              <option value="Surgery">Surgery</option>
+              <option value="ENT">ENT (Otolaryngology)</option>
+              <option value="Ophthalmology">Ophthalmology</option>
+              <option value="Psychiatry">Psychiatry</option>
+              <option value="Radiology">Radiology</option>
+              <option value="Oncology">Oncology</option>
+              <option value="Nephrology">Nephrology</option>
+              <option value="Gastroenterology">Gastroenterology</option>
+              <option value="Pulmonology">Pulmonology</option>
+              <option value="Dental Surgery">Dental Surgery</option>
+              <option value="Emergency Medicine">Emergency Medicine</option>
+              <option value="Pathology">Pathology</option>
+              <option value="Anesthesiology">Anesthesiology</option>
+            </select>
           </div>
           <div class="form-group">
             <label>Qualification</label>
-            <input type="text" id="edit-doc-qualification" class="input-field" placeholder="e.g. MBBS, MD">
+            <input type="text" id="edit-doc-qualification" class="input-field" placeholder="e.g. MBBS, MD, FRCS">
           </div>
           <div class="form-group">
-            <label>Department</label>
+            <label>Department <span style="color:var(--danger,#ef4444)">*</span></label>
             <select id="edit-doc-department" class="select-field" required>
               <option value="Cardiology">Cardiology</option>
               <option value="Neurology">Neurology</option>
@@ -1467,11 +1518,12 @@
           </div>
           <div class="form-group">
             <label>Room No.</label>
-            <input type="text" id="edit-doc-room" class="input-field" placeholder="e.g. Room 301">
+            <input type="text" id="edit-doc-room" class="input-field" placeholder="e.g. Room 301" pattern="^[A-Za-z0-9\s\-]+$" title="Room identifier (e.g. Room 301 or OPD-2)">
           </div>
           <div class="form-group">
-            <label>Consultation Fee (Rs.)</label>
-            <input type="number" id="edit-doc-fee" class="input-field" required placeholder="150" min="0">
+            <label>Consultation Fee (Rs.) <span style="color:var(--danger,#ef4444)">*</span></label>
+            <input type="number" id="edit-doc-fee" class="input-field" required placeholder="150" min="50" step="10">
+            <small style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Minimum fee Rs. 50</small>
           </div>
           <div class="form-group form-grid-full">
             <label>Availability</label>
@@ -1496,14 +1548,15 @@
       <form id="form-staff" onsubmit="submitStaff(event)">
         <div class="form-grid">
           <div class="form-group form-grid-full">
-            <label>Full Name</label>
-            <input type="text" id="staff-full-name" class="input-field" required placeholder="e.g. Nimal Perera">
+            <label>Full Name <span style="color:var(--danger,#ef4444)">*</span></label>
+            <input type="text" id="staff-full-name" class="input-field" required placeholder="e.g. Nimal Perera" pattern="^[A-Za-z\s\.\-']{3,60}$" title="Staff name must contain letters only (e.g. Nimal Perera)">
+            <small style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Letters only, minimum 3 characters</small>
           </div>
           <div class="form-group">
-            <label>Role</label>
+            <label>Role <span style="color:var(--danger,#ef4444)">*</span></label>
             <select id="staff-role" class="select-field" required>
-              <option value="Doctor">Doctor</option>
               <option value="Nurse">Nurse</option>
+              <option value="Doctor">Doctor</option>
               <option value="Receptionist">Receptionist</option>
               <option value="Laboratory Staff">Laboratory Staff</option>
               <option value="Pharmacist">Pharmacist</option>
@@ -1515,7 +1568,7 @@
             </select>
           </div>
           <div class="form-group">
-            <label>Department</label>
+            <label>Department <span style="color:var(--danger,#ef4444)">*</span></label>
             <select id="staff-department" class="select-field" required>
               <option value="Cardiology">Cardiology</option>
               <option value="Neurology">Neurology</option>
@@ -1532,12 +1585,14 @@
             </select>
           </div>
           <div class="form-group">
-            <label>Phone Number</label>
-            <input type="tel" id="staff-phone" class="input-field" placeholder="077...">
+            <label>Phone Number <span style="color:var(--danger,#ef4444)">*</span></label>
+            <input type="tel" id="staff-phone" class="input-field" required placeholder="0712345678" maxlength="15" pattern="^(?:0\d{9}|\+94\d{9}|\+?[1-9]\d{8,14})$" title="Valid phone number: 10 digits starting with 0 or +94 format (e.g. 0712345678)">
+            <small style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">e.g. 0712345678 (10 digits)</small>
           </div>
           <div class="form-group">
-            <label>Monthly Salary (Rs.)</label>
-            <input type="number" id="staff-salary" class="input-field" placeholder="35000" min="0">
+            <label>Monthly Salary (Rs.) <span style="color:var(--danger,#ef4444)">*</span></label>
+            <input type="number" id="staff-salary" class="input-field" required placeholder="35000" min="1000" step="500">
+            <small style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Minimum Rs. 1,000</small>
           </div>
           <div class="form-group form-grid-full">
             <label>Joining Date</label>
@@ -1560,14 +1615,15 @@
         <input type="hidden" id="edit-staff-id">
         <div class="form-grid">
           <div class="form-group form-grid-full">
-            <label>Full Name</label>
-            <input type="text" id="edit-staff-full-name" class="input-field" required placeholder="e.g. Nimal Perera">
+            <label>Full Name <span style="color:var(--danger,#ef4444)">*</span></label>
+            <input type="text" id="edit-staff-full-name" class="input-field" required placeholder="e.g. Nimal Perera" pattern="^[A-Za-z\s\.\-']{3,60}$" title="Staff name must contain letters only (e.g. Nimal Perera)">
+            <small style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Letters only, minimum 3 characters</small>
           </div>
           <div class="form-group">
-            <label>Role</label>
+            <label>Role <span style="color:var(--danger,#ef4444)">*</span></label>
             <select id="edit-staff-role" class="select-field" required>
-              <option value="Doctor">Doctor</option>
               <option value="Nurse">Nurse</option>
+              <option value="Doctor">Doctor</option>
               <option value="Receptionist">Receptionist</option>
               <option value="Laboratory Staff">Laboratory Staff</option>
               <option value="Pharmacist">Pharmacist</option>
@@ -1579,7 +1635,7 @@
             </select>
           </div>
           <div class="form-group">
-            <label>Department</label>
+            <label>Department <span style="color:var(--danger,#ef4444)">*</span></label>
             <select id="edit-staff-department" class="select-field" required>
               <option value="Cardiology">Cardiology</option>
               <option value="Neurology">Neurology</option>
@@ -1596,12 +1652,14 @@
             </select>
           </div>
           <div class="form-group">
-            <label>Phone Number</label>
-            <input type="tel" id="edit-staff-phone" class="input-field" placeholder="077...">
+            <label>Phone Number <span style="color:var(--danger,#ef4444)">*</span></label>
+            <input type="tel" id="edit-staff-phone" class="input-field" required placeholder="0712345678" maxlength="15" pattern="^(?:0\d{9}|\+94\d{9}|\+?[1-9]\d{8,14})$" title="Valid phone number: 10 digits starting with 0 or +94 format (e.g. 0712345678)">
+            <small style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">e.g. 0712345678 (10 digits)</small>
           </div>
           <div class="form-group">
-            <label>Monthly Salary (Rs.)</label>
-            <input type="number" id="edit-staff-salary" class="input-field" placeholder="35000" min="0">
+            <label>Monthly Salary (Rs.) <span style="color:var(--danger,#ef4444)">*</span></label>
+            <input type="number" id="edit-staff-salary" class="input-field" required placeholder="35000" min="1000" step="500">
+            <small style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Minimum Rs. 1,000</small>
           </div>
         </div>
         <div style="display: flex; gap: 0.75rem; margin-top: 1rem;">
